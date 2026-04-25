@@ -7,6 +7,7 @@ novelty signal: "not found", "similar work exists", or "exact match found".
 """
 
 from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from loguru import logger
 
 from literature.arxiv_search import ArxivSearchClient
@@ -21,6 +22,8 @@ class NoveltyChecker:
     Combines results from ArXiv and Semantic Scholar, deduplicates,
     and uses an LLM to assess novelty. Works without an LLM by
     falling back to a simple keyword-overlap heuristic.
+
+    Improvement: searches ArXiv and S2 in parallel via ThreadPoolExecutor.
     """
 
     def __init__(self, literature_config, llm_client=None):
@@ -41,7 +44,7 @@ class NoveltyChecker:
         Run full novelty check on a hypothesis.
 
         Steps:
-            1. Search ArXiv and Semantic Scholar in parallel
+            1. Search ArXiv and Semantic Scholar IN PARALLEL
             2. Deduplicate results by title similarity
             3. Use LLM (or heuristic) to assess novelty
             4. Return signal + references
@@ -59,12 +62,25 @@ class NoveltyChecker:
         """
         logger.info(f"Checking novelty: '{hypothesis[:80]}...'")
 
-        # ── Step 1: Search both sources ──────────────────────
-        # Extract key terms for search
+        # ── Step 1: Search both sources in parallel ──────────
         search_query = self._build_search_query(hypothesis)
 
-        arxiv_papers = self.arxiv.search(search_query)
-        s2_papers = self.s2.search(search_query)
+        arxiv_papers = []
+        s2_papers = []
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_arxiv = executor.submit(self.arxiv.search, search_query)
+            future_s2 = executor.submit(self.s2.search, search_query)
+
+            try:
+                arxiv_papers = future_arxiv.result(timeout=20)
+            except Exception as e:
+                logger.warning(f"ArXiv search failed: {e}")
+
+            try:
+                s2_papers = future_s2.result(timeout=20)
+            except Exception as e:
+                logger.warning(f"Semantic Scholar search failed: {e}")
 
         # ── Step 2: Combine and deduplicate ──────────────────
         all_papers = self._deduplicate(arxiv_papers + s2_papers)

@@ -19,7 +19,15 @@ class SemanticScholarClient:
 
     Searches papers by relevance and returns structured metadata
     including citation counts, year, and external IDs.
+
+    Includes rate limiting (1 req/s) and retry with backoff to
+    prevent 429 throttling.
     """
+
+    # Rate limit: 1 request per second (S2 free tier limit)
+    _MIN_REQUEST_INTERVAL = 1.0
+    _MAX_RETRIES = 2
+    _RETRY_BACKOFF = 3.0  # seconds
 
     def __init__(self, config):
         """
@@ -31,6 +39,16 @@ class SemanticScholarClient:
         self.base_url = config.s2_base_url
         self.max_results = config.s2_max_results
         self.fields = ",".join(config.s2_fields)
+        self._last_request_time = 0.0
+
+    def _rate_limit(self) -> None:
+        """Enforce rate limiting between API calls."""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._MIN_REQUEST_INTERVAL:
+            wait = self._MIN_REQUEST_INTERVAL - elapsed
+            logger.debug(f"S2 rate limit: waiting {wait:.2f}s")
+            time.sleep(wait)
+        self._last_request_time = time.time()
 
     def search(
         self,
@@ -39,6 +57,7 @@ class SemanticScholarClient:
     ) -> List[Dict]:
         """
         Search Semantic Scholar for papers matching the query.
+        Includes rate limiting and retry with backoff.
 
         Args:
             query: Natural language search query
@@ -59,22 +78,40 @@ class SemanticScholarClient:
             "fields": self.fields,
         }
 
-        try:
-            logger.info(
-                f"Semantic Scholar search: '{query[:80]}...' "
-                f"(max {n_results})"
-            )
-            response = requests.get(url, params=params, timeout=15)
-            response.raise_for_status()
+        # Retry loop with exponential backoff
+        for attempt in range(1, self._MAX_RETRIES + 1):
+            self._rate_limit()
 
-            data = response.json()
-            papers = self._parse_response(data)
-            logger.info(f"Semantic Scholar returned {len(papers)} papers")
-            return papers
+            try:
+                logger.info(
+                    f"Semantic Scholar search: '{query[:80]}...' "
+                    f"(max {n_results}, attempt {attempt})"
+                )
+                response = requests.get(url, params=params, timeout=15)
+                response.raise_for_status()
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Semantic Scholar API error: {e}")
-            return []
+                data = response.json()
+                papers = self._parse_response(data)
+                logger.info(f"Semantic Scholar returned {len(papers)} papers")
+                return papers
+
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    if attempt < self._MAX_RETRIES:
+                        wait = self._RETRY_BACKOFF * attempt
+                        logger.warning(
+                            f"S2 rate-limited (429), retrying in {wait:.0f}s..."
+                        )
+                        time.sleep(wait)
+                        continue
+                logger.error(f"Semantic Scholar API error: {e}")
+                return []
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Semantic Scholar API error: {e}")
+                return []
+
+        return []
 
     def _parse_response(self, data: Dict) -> List[Dict]:
         """

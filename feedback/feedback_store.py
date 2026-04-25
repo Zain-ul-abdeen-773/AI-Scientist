@@ -135,33 +135,68 @@ class FeedbackStore:
 
     def search_by_keywords(self, keywords: List[str]) -> List[Dict]:
         """
-        Find feedback items that match any of the given keywords.
+        Find feedback items using advanced BM25 ranking.
+        This provides much better semantic retrieval than naive keyword counting.
 
         Args:
             keywords: List of search terms
 
         Returns:
-            List of matching feedback items with match scores
+            List of matching feedback items, ranked by BM25 score
         """
         all_items = self.load_all()
-        scored_items = []
+        if not all_items or not keywords:
+            return []
 
-        for item in all_items:
-            # Search in hypothesis and notes
-            text = (
-                item.get("hypothesis", "") + " " +
-                item.get("notes", "") + " " +
-                item.get("experiment_type", "")
-            ).lower()
-
-            score = sum(1 for kw in keywords if kw.lower() in text)
-            if score > 0:
-                item["_match_score"] = score
-                scored_items.append(item)
-
-        # Sort by match score (highest first)
-        scored_items.sort(key=lambda x: x["_match_score"], reverse=True)
-        return scored_items
+        try:
+            from rank_bm25 import BM25Okapi
+            
+            # Prepare corpus
+            corpus = []
+            for item in all_items:
+                # Combine relevant fields into a single document string
+                text = (
+                    item.get("hypothesis", "") + " " +
+                    item.get("notes", "") + " " +
+                    item.get("experiment_type", "")
+                ).lower()
+                # Tokenize (simple split)
+                corpus.append(text.split())
+                
+            # Initialize BM25
+            bm25 = BM25Okapi(corpus)
+            
+            # Query the corpus
+            query = [k.lower() for k in keywords]
+            doc_scores = bm25.get_scores(query)
+            
+            # Attach scores to items and filter
+            scored_items = []
+            for item, score in zip(all_items, doc_scores):
+                if score > 0:
+                    item["_match_score"] = score
+                    scored_items.append(item)
+                    
+            # Sort by match score (highest first)
+            scored_items.sort(key=lambda x: x["_match_score"], reverse=True)
+            return scored_items
+            
+        except ImportError:
+            logger.warning("rank_bm25 not installed, falling back to simple keyword count. Run: pip install rank_bm25")
+            # Fallback to naive counting
+            scored_items = []
+            for item in all_items:
+                text = (
+                    item.get("hypothesis", "") + " " +
+                    item.get("notes", "") + " " +
+                    item.get("experiment_type", "")
+                ).lower()
+                score = sum(1 for kw in keywords if kw.lower() in text)
+                if score > 0:
+                    item["_match_score"] = score
+                    scored_items.append(item)
+            scored_items.sort(key=lambda x: x["_match_score"], reverse=True)
+            return scored_items
 
     def get_stats(self) -> Dict:
         """

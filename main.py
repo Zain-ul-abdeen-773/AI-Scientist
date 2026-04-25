@@ -91,11 +91,17 @@ def main():
     logger.info(f"🌐 Launching on port {config.ui.server_port}")
     logger.info(f"🔗 Open: http://localhost:{config.ui.server_port}")
 
+    # Get theme/css attached by create_app
+    theme = getattr(app, "_custom_theme", None)
+    css = getattr(app, "_custom_css", None)
+
     app.launch(
         server_name=config.ui.server_name,
         server_port=config.ui.server_port,
         share=config.ui.share,
         show_error=True,
+        theme=theme,
+        css=css,
     )
 
 

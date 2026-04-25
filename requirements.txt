@@ -6,6 +6,7 @@
 # --- LLM Backends ---
 groq>=0.4.0                    # Groq cloud inference (LLaMA-3)
 google-generativeai>=0.5.0     # Google Gemini API (fallback)
+google-genai>=0.1.0            # Modern Google Gemini SDK
 openai>=1.10.0                 # OpenAI API (optional fallback)
 
 # --- Web UI ---
@@ -17,3 +18,4 @@ requests>=2.31.0               # Semantic Scholar + ArXiv APIs
 # --- Utilities ---
 python-dotenv>=1.0.0           # .env file loading
 loguru>=0.7.2                  # Structured logging
+fpdf2>=2.7.0                   # PDF Export generation

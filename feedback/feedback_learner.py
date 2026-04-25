@@ -120,7 +120,7 @@ class FeedbackLearner:
 
         for section_name, section_data in sections.items():
             # Only include sections that have actual corrections
-            correction_text = section_data.get("correction", "").strip()
+            correction_text = (section_data.get("correction") or "").strip()
             if correction_text:
                 corrections.append({
                     "experiment_type": feedback_item.get(

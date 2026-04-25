@@ -4,7 +4,7 @@ The AI Scientist — Gradio Web Application
 Full demo UI with 4 tabs:
     1. Input & Literature QC — Enter hypothesis, see novelty check
     2. Experiment Plan — Full plan with protocol, materials, budget,
-       timeline, and validation
+       timeline, and validation + Markdown export
     3. Scientist Review — Rate, correct, and annotate plan sections
     4. System Info — Architecture, status, feedback stats
 
@@ -12,7 +12,9 @@ Hack-Nation × World Bank Youth Summit · Global AI Hackathon 2026
 """
 
 import json
-from typing import Optional, Tuple
+import tempfile
+from pathlib import Path
+from typing import Optional
 from loguru import logger
 
 import gradio as gr
@@ -23,16 +25,17 @@ from literature.novelty_checker import NoveltyChecker
 from planner.experiment_planner import ExperimentPlanner
 from feedback.feedback_store import FeedbackStore
 from feedback.feedback_learner import FeedbackLearner
+from llm.prompts import REFINE_HYPOTHESIS_PROMPT, SYSTEM_PROMPT
+from utils.pdf_exporter import export_plan_to_pdf
 
 
 # ═══════════════════════════════════════════════════════════════
-# Application State (shared across tabs)
+# Application State
 # ═══════════════════════════════════════════════════════════════
 class AppState:
     """Holds shared state between UI tabs."""
 
     def __init__(self, config: AppConfig):
-        # Initialize all modules
         self.config = config
         self.llm = LLMClient(config.llm)
         self.novelty_checker = NoveltyChecker(config.literature, self.llm)
@@ -46,6 +49,7 @@ class AppState:
         self.last_hypothesis = ""
         self.last_novelty_result = {}
         self.last_plan = {}
+        self.last_plan_text = ""  # Raw markdown for export
 
         logger.info("AppState initialized — all modules ready")
 
@@ -55,22 +59,9 @@ class AppState:
 # ═══════════════════════════════════════════════════════════════
 
 def run_literature_qc(hypothesis: str, state: AppState):
-    """
-    Run literature QC and return novelty signal + references.
-
-    Args:
-        hypothesis: User's scientific hypothesis
-        state: Shared application state
-
-    Returns:
-        Tuple of (novelty_badge, assessment_text, references_text)
-    """
+    """Run literature QC and return novelty signal + references."""
     if not hypothesis.strip():
-        return (
-            "⚠️ Please enter a hypothesis.",
-            "",
-            "",
-        )
+        return "⚠️ Please enter a hypothesis.", "", ""
 
     state.last_hypothesis = hypothesis
 
@@ -78,7 +69,7 @@ def run_literature_qc(hypothesis: str, state: AppState):
         result = state.novelty_checker.check(hypothesis)
         state.last_novelty_result = result
 
-        # Format novelty badge with color
+        # Format novelty badge
         signal = result.get("signal", "unknown")
         badge_map = {
             "not found": "🟢 **NOT FOUND** — This appears to be novel!",
@@ -112,24 +103,11 @@ def run_literature_qc(hypothesis: str, state: AppState):
         return f"❌ Error: {str(e)}", "", ""
 
 
-def generate_plan(
-    hypothesis: str, mode: str, state: AppState
-):
-    """
-    Generate the full experiment plan.
-
-    Args:
-        hypothesis: User's scientific hypothesis
-        mode: "single_shot" or "modular"
-        state: Shared application state
-
-    Returns:
-        Full plan markdown text
-    """
+def generate_plan(hypothesis: str, mode: str, state: AppState):
+    """Generate the full experiment plan."""
     if not hypothesis.strip():
         return "⚠️ Please enter a hypothesis first."
 
-    # Use stored hypothesis if available
     hyp = hypothesis or state.last_hypothesis
     state.last_hypothesis = hyp
 
@@ -145,41 +123,84 @@ def generate_plan(
         )
 
         state.last_plan = result
-        return result.get("full_plan", "No plan generated.")
+        plan_text = result.get("full_plan", "No plan generated.")
+        state.last_plan_text = plan_text
+        return plan_text
 
     except Exception as e:
         logger.error(f"Plan generation failed: {e}")
         return f"❌ Error: {str(e)}"
 
 
-def save_feedback(
-    hypothesis: str,
-    experiment_type: str,
-    overall_rating: int,
-    protocol_rating: int,
-    protocol_correction: str,
-    materials_rating: int,
-    materials_correction: str,
-    timeline_rating: int,
-    timeline_correction: str,
-    validation_rating: int,
-    validation_correction: str,
-    notes: str,
-    state: AppState,
-):
-    """
-    Save scientist feedback to the store.
+def export_plan_as_file(state: AppState):
+    """Export the last generated plan as a downloadable .md file."""
+    if not state.last_plan_text or state.last_plan_text.startswith("⚠️"):
+        return gr.update(value=None, visible=False)
 
-    Returns:
-        Status message
-    """
+    export_dir = Path(tempfile.gettempdir()) / "ai_scientist_exports"
+    export_dir.mkdir(exist_ok=True)
+    filepath = export_dir / "experiment_plan.md"
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(state.last_plan_text)
+
+    logger.info(f"Plan exported to {filepath}")
+    return gr.update(value=str(filepath), visible=True)
+
+
+def export_plan_as_pdf(state: AppState):
+    """Export the last generated plan as a downloadable .pdf file."""
+    if not state.last_plan_text or state.last_plan_text.startswith("⚠️"):
+        return gr.update(value=None, visible=False)
+
+    try:
+        novelty_signal = state.last_novelty_result.get("signal", "")
+        filepath = export_plan_to_pdf(
+            plan_text=state.last_plan_text,
+            hypothesis=state.last_hypothesis,
+            novelty_signal=novelty_signal
+        )
+        return gr.update(value=str(filepath), visible=True)
+    except Exception as e:
+        logger.error(f"Failed to export PDF: {e}")
+        return gr.update(value=None, visible=False)
+
+
+def refine_hypothesis(hypothesis: str, state: AppState):
+    """Refine a weak hypothesis into a stronger one."""
+    if not hypothesis.strip():
+        return "⚠️ Please enter a hypothesis to refine."
+    
+    try:
+        prompt = REFINE_HYPOTHESIS_PROMPT.format(hypothesis=hypothesis)
+        refined = state.llm.generate(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPT,
+            max_tokens=1024
+        )
+        return refined
+    except Exception as e:
+        logger.error(f"Failed to refine hypothesis: {e}")
+        return f"❌ Error: {str(e)}"
+
+
+
+def save_feedback(
+    hypothesis, experiment_type, overall_rating,
+    protocol_rating, protocol_correction,
+    materials_rating, materials_correction,
+    timeline_rating, timeline_correction,
+    validation_rating, validation_correction,
+    notes, state: AppState,
+):
+    """Save scientist feedback to the store."""
     if not hypothesis.strip():
         return "⚠️ Please provide the hypothesis that was evaluated."
 
     feedback = {
         "hypothesis": hypothesis,
         "experiment_type": experiment_type,
-        "domain": "",  # Could be auto-detected
+        "domain": "",
         "overall_rating": int(overall_rating),
         "sections": {
             "protocol": {
@@ -226,15 +247,7 @@ def save_feedback(
 # ═══════════════════════════════════════════════════════════════
 
 def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
-    """
-    Build the full Gradio demo application.
-
-    Args:
-        config: Application configuration (uses default if None)
-
-    Returns:
-        Gradio Blocks application
-    """
+    """Build the full Gradio demo application."""
     config = config or get_config()
     state = AppState(config)
 
@@ -263,15 +276,18 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
     }
     """
 
-    with gr.Blocks(
-        title="The AI Scientist",
-        theme=gr.themes.Soft(
-            primary_hue="indigo",
-            secondary_hue="violet",
-            neutral_hue="slate",
-        ),
-        css=custom_css,
-    ) as app:
+    # Store theme/css for launch() — Gradio 6.0+ API
+    app_theme = gr.themes.Soft(
+        primary_hue="indigo",
+        secondary_hue="violet",
+        neutral_hue="slate",
+    )
+
+    with gr.Blocks(title="The AI Scientist") as app:
+
+        # Attach theme/css for launch()
+        app._custom_theme = app_theme
+        app._custom_css = custom_css
 
         # ── Header ──────────────────────────────────────────
         gr.Markdown(
@@ -319,11 +335,20 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                         scale=2,
                         elem_id="qc_button",
                     )
+                    refine_btn = gr.Button(
+                        "✨ Refine Hypothesis",
+                        variant="secondary",
+                        scale=1,
+                        elem_id="refine_button",
+                    )
                     clear_btn = gr.Button(
                         "🗑️ Clear",
                         variant="secondary",
                         scale=1,
                     )
+                    
+                with gr.Accordion("✨ AI Refinement", open=False) as refine_accordion:
+                    refined_output = gr.Markdown()
 
                 # Sample inputs
                 with gr.Accordion("💡 Sample Hypotheses", open=False):
@@ -359,12 +384,20 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                     inputs=[hypothesis_input],
                     outputs=[novelty_badge, assessment_text, references_text],
                 )
+                
+                refine_btn.click(
+                    fn=lambda h: (refine_hypothesis(h, state), gr.update(open=True)),
+                    inputs=[hypothesis_input],
+                    outputs=[refined_output, refine_accordion],
+                )
+                
                 clear_btn.click(
-                    fn=lambda: ("", "", "", ""),
+                    fn=lambda: ("", "", "", "", "", gr.update(open=False)),
                     inputs=[],
                     outputs=[
                         hypothesis_input, novelty_badge,
                         assessment_text, references_text,
+                        refined_output, refine_accordion
                     ],
                 )
 
@@ -397,15 +430,36 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                         ),
                     )
 
-                generate_btn = gr.Button(
-                    "🚀 Generate Experiment Plan",
-                    variant="primary",
-                    elem_id="generate_button",
-                )
+                with gr.Row():
+                    generate_btn = gr.Button(
+                        "🚀 Generate Experiment Plan",
+                        variant="primary",
+                        scale=3,
+                        elem_id="generate_button",
+                    )
+                    export_md_btn = gr.Button(
+                        "📥 Export Markdown",
+                        variant="secondary",
+                        scale=1,
+                        elem_id="export_md_button",
+                    )
+                    export_pdf_btn = gr.Button(
+                        "📄 Export PDF",
+                        variant="secondary",
+                        scale=1,
+                        elem_id="export_pdf_button",
+                    )
 
                 plan_output = gr.Markdown(
                     value="*Click 'Generate Experiment Plan' to create your plan.*",
                     elem_id="plan_output",
+                )
+
+                # Download file component (hidden until export)
+                download_file = gr.File(
+                    label="Download Plan",
+                    visible=False,
+                    elem_id="download_file",
                 )
 
                 # Wire events
@@ -413,6 +467,18 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                     fn=lambda h, m: generate_plan(h, m, state),
                     inputs=[plan_hypothesis, mode_select],
                     outputs=[plan_output],
+                )
+
+                export_md_btn.click(
+                    fn=lambda: export_plan_as_file(state),
+                    inputs=[],
+                    outputs=[download_file],
+                )
+                
+                export_pdf_btn.click(
+                    fn=lambda: export_plan_as_pdf(state),
+                    inputs=[],
+                    outputs=[download_file],
                 )
 
                 # Auto-fill hypothesis from Tab 1
@@ -528,7 +594,9 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
 
                 # Wire events
                 submit_feedback_btn.click(
-                    fn=lambda *args: save_feedback(*args, state=state),
+                    fn=lambda h, et, oR, pR, pC, mR, mC, tR, tC, vR, vC, n: save_feedback(
+                        h, et, oR, pR, pC, mR, mC, tR, tC, vR, vC, n, state
+                    ),
                     inputs=[
                         review_hypothesis, experiment_type, overall_rating,
                         protocol_rating, protocol_correction,
@@ -569,7 +637,7 @@ User Input (Hypothesis)
        │
        ▼
 ┌─────────────────┐
-│  Literature QC  │ ── ArXiv + Semantic Scholar
+│  Literature QC  │ ── ArXiv + Semantic Scholar (parallel)
 │  (Novelty Check)│
 └────────┬────────┘
          │
@@ -586,7 +654,7 @@ User Input (Hypothesis)
            │
            ▼
 ┌─────────────────┐
-│ Scientist Review│ ── Feedback Store
+│ Scientist Review│ ── Feedback Store → Few-Shot Learning
 │ (Learning Loop) │
 └─────────────────┘
 ```
@@ -595,6 +663,12 @@ User Input (Hypothesis)
 {chr(10).join(status_lines)}
 
 Active provider: **{state.llm.provider_name}**
+
+### ⚡ Optimizations
+- **Parallel search** — ArXiv + S2 via ThreadPoolExecutor
+- **Response caching** — Repeated prompts return instantly
+- **Retry + backoff** — Handles rate limits gracefully (3 retries)
+- **S2 rate limiting** — Prevents 429 throttling
 
 ### 📊 Feedback Stats
 - Total feedback items: **{feedback_stats['total_count']}**

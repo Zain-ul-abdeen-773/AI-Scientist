@@ -1,0 +1,40 @@
+# ============================================================
+# The AI Scientist — .gitignore
+# ============================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# --- Environment ---
+.env
+
+# --- API key files (keep out of git) ---
+gemini_key.txt
+groq_key.txt
+
+# --- Data & Logs ---
+data/
+*.log
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+project_techniques.txt
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Temp ---
+*.bak
+*.tmp
+verify.py

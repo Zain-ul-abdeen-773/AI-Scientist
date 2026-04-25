@@ -217,3 +217,26 @@ Incorporate these learnings into your plan:
 {feedback_items}
 
 Use these corrections to improve accuracy of the current plan."""
+
+
+# ═══════════════════════════════════════════════════════════════
+# Advanced Optimizations
+# ═══════════════════════════════════════════════════════════════
+REFINE_HYPOTHESIS_PROMPT = """You are a senior scientist reviewing a colleague's drafted hypothesis.
+Your goal is to make it more rigorous, testable, and specific before they start planning the experiment.
+
+## Original Hypothesis
+{hypothesis}
+
+## Instructions
+1. Analyze the original hypothesis for weaknesses (e.g., lack of specific metrics, vague comparisons, missing controls, or unrealistic scope).
+2. Propose a refined, significantly stronger version of the hypothesis.
+3. Keep the refined version concise (1-3 sentences) but pack it with specific operational details.
+
+Format your response exactly like this:
+
+### Refined Hypothesis
+[Your improved hypothesis here]
+
+### Why this is better
+[1-2 sentences explaining the improvements]"""
