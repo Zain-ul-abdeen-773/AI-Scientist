@@ -1,0 +1,19 @@
+# ============================================================
+# The AI Scientist — Dependencies
+# Hack-Nation × World Bank Youth Summit · Global AI Hackathon 2026
+# ============================================================
+
+# --- LLM Backends ---
+groq>=0.4.0                    # Groq cloud inference (LLaMA-3)
+google-generativeai>=0.5.0     # Google Gemini API (fallback)
+openai>=1.10.0                 # OpenAI API (optional fallback)
+
+# --- Web UI ---
+gradio>=4.10.0                 # Interactive demo interface
+
+# --- HTTP & APIs ---
+requests>=2.31.0               # Semantic Scholar + ArXiv APIs
+
+# --- Utilities ---
+python-dotenv>=1.0.0           # .env file loading
+loguru>=0.7.2                  # Structured logging
