@@ -722,7 +722,65 @@ function ViewInfo() {
         <p className="text-sm text-zinc-500 mt-1">Live architecture and backend parameters.</p>
       </div>
 
-      <div className="bg-white border border-zinc-200/60 shadow-sm rounded-xl p-8 prose prose-sm prose-zinc max-w-none prose-pre:bg-zinc-900 prose-pre:text-zinc-100">
+      {/* Modern Visual Architecture Pipeline */}
+      <div className="bg-zinc-900 rounded-xl p-8 shadow-xl overflow-hidden relative">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-indigo-500/20 blur-[100px] pointer-events-none" />
+        
+        <h3 className="text-zinc-100 font-semibold mb-8 flex items-center gap-2">
+          <Cpu size={18} className="text-indigo-400" /> Neural Architecture Pipeline
+        </h3>
+
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+          
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+            className="flex-1 w-full flex flex-col items-center text-center space-y-3"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-zinc-700/50 shadow-inner flex items-center justify-center relative">
+              <Search className="text-emerald-400" size={24} />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-zinc-900"></div>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-zinc-200">Literature QC</h4>
+              <p className="text-xs text-zinc-500 mt-1">Parallel Semantic Scholar <br/>& ArXiv Retrieval</p>
+            </div>
+          </motion.div>
+
+          <ArrowRight className="text-zinc-700 hidden md:block shrink-0" size={20} />
+
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+            className="flex-1 w-full flex flex-col items-center text-center space-y-3"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-zinc-700/50 shadow-inner flex items-center justify-center relative">
+               <FlaskConical className="text-indigo-400" size={24} />
+               <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-zinc-900 animate-pulse"></div>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-zinc-200">Experiment Planner</h4>
+              <p className="text-xs text-zinc-500 mt-1">LLM Orchestration <br/>(Gemini/Groq)</p>
+            </div>
+          </motion.div>
+
+          <ArrowRight className="text-zinc-700 hidden md:block shrink-0" size={20} />
+
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}
+            className="flex-1 w-full flex flex-col items-center text-center space-y-3"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-zinc-700/50 shadow-inner flex items-center justify-center relative">
+               <Database className="text-amber-400" size={24} />
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-zinc-200">BM25 Feedback Store</h4>
+              <p className="text-xs text-zinc-500 mt-1">Few-shot learning <br/>via Scientist Review</p>
+            </div>
+          </motion.div>
+
+        </div>
+      </div>
+
+      <div className="bg-white border border-zinc-200/60 shadow-sm rounded-xl p-8 prose prose-sm prose-zinc max-w-none">
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>{infoMd}</ReactMarkdown>
       </div>
     </motion.div>
