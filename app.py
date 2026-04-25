@@ -256,36 +256,7 @@ def get_system_info(state: AppState):
 
     feedback_stats = state.feedback_store.get_stats()
     
-    return f"""### 🏗️ Architecture
-
-```
-User Input (Hypothesis)
-       │
-       ▼
-┌─────────────────┐
-│  Literature QC  │ ── ArXiv + Semantic Scholar (parallel)
-│  (Novelty Check)│
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Experiment Planner        │
-│  ┌──────────┐ ┌───────────┐│
-│  │ Protocol │ │ Materials ││
-│  └──────────┘ └───────────┘│
-│  ┌──────────┐ ┌───────────┐│
-│  │ Timeline │ │Validation ││
-│  └──────────┘ └───────────┘│
-└──────────┬──────────────────┘
-           │
-           ▼
-┌─────────────────┐
-│ Scientist Review│ ── Feedback Store → Few-Shot Learning
-│ (Learning Loop) │
-└─────────────────┘
-```
-
-### 🔌 LLM Providers
+    return f"""### 🔌 Active Backend Services
 {chr(10).join(status_lines)}
 
 Active provider: **{state.llm.provider_name}**

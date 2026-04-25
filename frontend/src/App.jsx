@@ -8,7 +8,7 @@ import {
   ChevronRight, ChevronDown, CheckCircle2, Circle, 
   ExternalLink, FileText, Download, Activity, Play,
   Microscope, Sparkles, AlertCircle, Save,
-  Star
+  Star, Database, GitMerge, Cpu, ArrowRight
 } from 'lucide-react';
 
 // --- Animation Variants & Physics ---
