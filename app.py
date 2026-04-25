@@ -246,6 +246,64 @@ def save_feedback(
 # Build Gradio Application
 # ═══════════════════════════════════════════════════════════════
 
+
+def get_system_info(state: AppState):
+    llm_status = state.llm.status()
+    status_lines = []
+    for provider, available in llm_status.items():
+        icon = "✅" if available else "❌"
+        status_lines.append(f"- {icon} **{provider.title()}**")
+
+    feedback_stats = state.feedback_store.get_stats()
+    
+    return f"""### 🏗️ Architecture
+
+```
+User Input (Hypothesis)
+       │
+       ▼
+┌─────────────────┐
+│  Literature QC  │ ── ArXiv + Semantic Scholar (parallel)
+│  (Novelty Check)│
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────┐
+│   Experiment Planner        │
+│  ┌──────────┐ ┌───────────┐│
+│  │ Protocol │ │ Materials ││
+│  └──────────┘ └───────────┘│
+│  ┌──────────┐ ┌───────────┐│
+│  │ Timeline │ │Validation ││
+│  └──────────┘ └───────────┘│
+└──────────┬──────────────────┘
+           │
+           ▼
+┌─────────────────┐
+│ Scientist Review│ ── Feedback Store → Few-Shot Learning
+│ (Learning Loop) │
+└─────────────────┘
+```
+
+### 🔌 LLM Providers
+{chr(10).join(status_lines)}
+
+Active provider: **{state.llm.provider_name}**
+
+### ⚡ Optimizations
+- **Parallel search** — ArXiv + S2 via ThreadPoolExecutor
+- **Response caching** — Repeated prompts return instantly
+- **Retry + backoff** — Handles rate limits gracefully (3 retries)
+- **S2 rate limiting** — Prevents 429 throttling
+- **BM25 Retrieval** — Advanced semantic routing for few-shot feedback
+
+### 📊 Feedback Stats
+- Total feedback items: **{feedback_stats['total_count']}**
+- Diagnostics: **{feedback_stats['types'].get('diagnostics', 0)}**
+- Cell Biology: **{feedback_stats['types'].get('cell_biology', 0)}**
+- Average Rating: **{feedback_stats['avg_rating']:.1f}/5**"""
+
+
 def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
     """Build the full Gradio demo application."""
     config = config or get_config()
@@ -383,12 +441,14 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                     fn=lambda h: run_literature_qc(h, state),
                     inputs=[hypothesis_input],
                     outputs=[novelty_badge, assessment_text, references_text],
+                    api_name="check_literature",
                 )
                 
                 refine_btn.click(
                     fn=lambda h: (refine_hypothesis(h, state), gr.update(open=True)),
                     inputs=[hypothesis_input],
                     outputs=[refined_output, refine_accordion],
+                    api_name="refine_hypothesis",
                 )
                 
                 clear_btn.click(
@@ -467,18 +527,21 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                     fn=lambda h, m: generate_plan(h, m, state),
                     inputs=[plan_hypothesis, mode_select],
                     outputs=[plan_output],
+                    api_name="generate_plan",
                 )
 
                 export_md_btn.click(
                     fn=lambda: export_plan_as_file(state),
                     inputs=[],
                     outputs=[download_file],
+                    api_name="export_md",
                 )
                 
                 export_pdf_btn.click(
                     fn=lambda: export_plan_as_pdf(state),
                     inputs=[],
                     outputs=[download_file],
+                    api_name="export_pdf",
                 )
 
                 # Auto-fill hypothesis from Tab 1
@@ -606,6 +669,7 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                         notes,
                     ],
                     outputs=[feedback_status],
+                    api_name="save_feedback",
                 )
 
                 # Auto-fill hypothesis from other tabs
@@ -619,71 +683,22 @@ def create_app(config: Optional[AppConfig] = None) -> gr.Blocks:
             # TAB 4: System Info
             # ══════════════════════════════════════════════════
             with gr.Tab("ℹ️ System Info", id="info_tab"):
-                # LLM status
-                llm_status = state.llm.status()
-                status_lines = []
-                for provider, available in llm_status.items():
-                    icon = "✅" if available else "❌"
-                    status_lines.append(f"- {icon} **{provider.title()}**")
-
-                feedback_stats = state.feedback_store.get_stats()
-
-                gr.Markdown(
-                    f"""
-### 🏗️ Architecture
-
-```
-User Input (Hypothesis)
-       │
-       ▼
-┌─────────────────┐
-│  Literature QC  │ ── ArXiv + Semantic Scholar (parallel)
-│  (Novelty Check)│
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────┐
-│   Experiment Planner        │
-│  ┌──────────┐ ┌───────────┐│
-│  │ Protocol │ │ Materials ││
-│  └──────────┘ └───────────┘│
-│  ┌──────────┐ ┌───────────┐│
-│  │ Timeline │ │Validation ││
-│  └──────────┘ └───────────┘│
-└──────────┬──────────────────┘
-           │
-           ▼
-┌─────────────────┐
-│ Scientist Review│ ── Feedback Store → Few-Shot Learning
-│ (Learning Loop) │
-└─────────────────┘
-```
-
-### 🔌 LLM Providers
-{chr(10).join(status_lines)}
-
-Active provider: **{state.llm.provider_name}**
-
-### ⚡ Optimizations
-- **Parallel search** — ArXiv + S2 via ThreadPoolExecutor
-- **Response caching** — Repeated prompts return instantly
-- **Retry + backoff** — Handles rate limits gracefully (3 retries)
-- **S2 rate limiting** — Prevents 429 throttling
-
-### 📊 Feedback Stats
-- Total feedback items: **{feedback_stats['total_count']}**
-- Average rating: **{feedback_stats['avg_rating']:.1f}/5**
-- Experiment types: {json.dumps(feedback_stats.get('types', {}), indent=2) if feedback_stats.get('types') else 'None yet'}
-
-### 🔗 Data Sources
-- **ArXiv** — REST API (no key needed)
-- **Semantic Scholar** — Graph API (no key needed)
-- **protocols.io** — Referenced in generated protocols
-- **Bio-protocol** — Referenced in generated protocols
-
-### 🏆 Hack-Nation × World Bank Youth Summit
-Global AI Hackathon 2026 — FULCRUM × Hack-Nation Challenge
-                    """
+                info_markdown = gr.Markdown()
+                
+                # Hidden button to fetch system info for API clients
+                get_info_btn = gr.Button("Get Info", visible=False)
+                get_info_btn.click(
+                    fn=lambda: get_system_info(state),
+                    inputs=[],
+                    outputs=[info_markdown],
+                    api_name="get_system_info",
+                )
+                
+                # Also load it on page load for Gradio UI
+                app.load(
+                    fn=lambda: get_system_info(state),
+                    inputs=[],
+                    outputs=[info_markdown],
                 )
 
     return app
