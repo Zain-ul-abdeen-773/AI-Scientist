@@ -247,6 +247,8 @@ Choose a generation mode:
 The plan includes all 5 required sections:
 1. **Protocol** — Step-by-step methodology with specific parameters
 2. **Materials & Budget** — Reagents with real catalog numbers and costs
+    
+    Detailed Mermaid diagram: [docs/architecture_diagram.md](docs/architecture_diagram.md)
 3. **Timeline** — Phased breakdown with dependencies
 4. **Validation** — Statistical analysis plan and controls
 
