@@ -1,0 +1,91 @@
+\documentclass[tikz,border=15pt]{standalone}
+\usepackage{xcolor}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric, calc, shadows, fit, backgrounds}
+
+% Define colors
+\definecolor{primary}{RGB}{59, 130, 246} % blue-500
+\definecolor{secondary}{RGB}{99, 102, 241} % indigo-500
+\definecolor{accent}{RGB}{217, 70, 239} % fuchsia-500
+\definecolor{warning}{RGB}{249, 115, 22} % orange-500
+\definecolor{success}{RGB}{34, 197, 94} % green-500
+\definecolor{info}{RGB}{6, 182, 212} % cyan-500
+\definecolor{danger}{RGB}{244, 63, 94} % rose-500
+\definecolor{bglight}{RGB}{248, 250, 252} % slate-50
+\definecolor{borderlight}{RGB}{203, 213, 225} % slate-300
+
+\begin{document}
+\begin{tikzpicture}[
+    font=\sffamily,
+    >=Stealth,
+    node distance=1.5cm and 2cm,
+    % Styles
+    base/.style={
+        draw, thick, align=center, inner sep=2.5ex, drop shadow={opacity=0.15, shadow xshift=3pt, shadow yshift=-3pt, color=gray}
+    },
+    input/.style={base, rectangle, rounded corners=10pt, fill=bglight, draw=primary, text=black, minimum width=6cm, line width=1.5pt},
+    module/.style={base, rectangle, rounded corners=8pt, fill=white, draw=secondary, minimum width=5cm, line width=1.5pt},
+    search/.style={base, rectangle, rounded corners=6pt, fill=bglight, draw=accent, minimum width=4cm, line width=1.2pt},
+    llm/.style={base, rectangle, rounded corners=8pt, fill=bglight, draw=warning, minimum width=7cm, line width=1.5pt},
+    generator/.style={base, rectangle, rounded corners=6pt, fill=bglight, draw=success, minimum width=3cm, text width=2.8cm, line width=1.2pt},
+    final/.style={base, rectangle, rounded corners=10pt, fill=bglight, draw=info, minimum width=7cm, line width=2pt},
+    feedback/.style={base, rectangle, rounded corners=10pt, fill=bglight, draw=danger, dashed, minimum width=7cm, line width=1.5pt},
+    container/.style={draw=borderlight, dashed, rounded corners=15pt, fill=bglight!40, inner sep=20pt, line width=1.5pt},
+    arrow/.style={->, thick, draw=gray!80, line width=1.2pt},
+    thickarrow/.style={->, draw=gray!90, line width=2pt}
+]
+
+% 1. User Input
+\node[input] (user) {\textbf{\Large User Input}\\[2mm] \large Scientific Hypothesis};
+
+% 2. Literature QC Module
+\node[search, below left=2.5cm and -1.5cm of user] (arxiv) {\textbf{\large ArXiv API}\\[1mm] Preprints};
+\node[search, below right=2.5cm and -1.5cm of user] (semantic) {\textbf{\large Semantic Scholar}\\[1mm] Graph API};
+
+\begin{scope}[on background layer]
+    \node[container, fit=(arxiv) (semantic), label={[font=\Large\bfseries\color{secondary}, yshift=3ex]above:Literature QC Module}] (lit_qc) {};
+\end{scope}
+
+\node[module, below=1.8cm of lit_qc] (novelty) {\textbf{\Large Novelty Signal}};
+
+% 3. LLM Orchestrator
+\node[llm, below=2cm of novelty] (llm) {\textbf{\Large LLM Orchestrator}\\[2mm] \large Multi-Provider Fallback\\ \normalsize Groq $\rightarrow$ Gemini $\rightarrow$ OpenAI};
+
+% 4. Planners
+\node[generator, below=3cm of llm] (budget) {\textbf{\large Budget}\\[1mm] Cost Estimator};
+\node[generator, left=0.8cm of budget] (materials) {\textbf{\large Materials}\\[1mm] \& Supply Chain};
+\node[generator, left=0.8cm of materials] (protocol) {\textbf{\large Protocol}\\[1mm] Step-by-step};
+\node[generator, right=0.8cm of budget] (timeline) {\textbf{\large Timeline}\\[1mm] Dependencies};
+\node[generator, right=0.8cm of timeline] (validation) {\textbf{\large Validation}\\[1mm] Success Criteria};
+
+\begin{scope}[on background layer]
+    \node[container, fit=(protocol) (materials) (budget) (timeline) (validation), label={[font=\Large\bfseries\color{success}, yshift=3ex]above:AI Generation Modules}] (planners) {};
+\end{scope}
+
+% 5. Complete Plan
+\node[final, below=2.5cm of planners] (plan) {\textbf{\Large Complete Experiment Plan}\\[2mm] \large Ready for Lab Execution};
+
+% 6. Feedback
+\node[feedback, below=2cm of plan] (feedback) {\textbf{\Large Scientist Review \& Feedback}\\[2mm] \large Few-Shot Data Storage};
+
+% Connections
+\draw[thickarrow] (user) -- node[right=3mm, align=left, font=\large\color{gray!90}] {\textbf{Evaluates}\\\textbf{Novelty}} (lit_qc);
+\draw[thickarrow] (lit_qc) -- (novelty);
+
+% Novelty to LLM
+\coordinate (n_south) at (novelty.south);
+\draw[thickarrow] (n_south) -- ++(0,-0.8) coordinate (mid_n) -| node[above=1mm, font=\large\color{gray!90}, pos=0.25] {\textbf{Not Found}} (llm.130);
+\draw[thickarrow] (n_south) -- node[right=1mm, font=\large\color{gray!90}] {\textbf{Similar Work}} (llm.90);
+\draw[thickarrow] (n_south) -- ++(0,-0.8) -| node[above=1mm, font=\large\color{gray!90}, pos=0.25] {\textbf{Exact Match}} (llm.50);
+
+\draw[thickarrow] (llm) -- (planners);
+
+\draw[thickarrow] (planners) -- (plan);
+\draw[thickarrow, dashed] (plan) -- node[right=2mm, font=\large\color{gray!90}] {\textbf{Sent to Scientist}} (feedback);
+
+% Feedback loop to LLM
+\coordinate (fb_left) at (feedback.west);
+\coordinate (llm_left) at (llm.west);
+\draw[thickarrow, dashed, draw=danger] (fb_left) -- ++(-9,0) |- node[left=2mm, font=\Large\bfseries\color{danger}, pos=0.25] {Few-Shot Learning Loop} (llm_left);
+
+\end{tikzpicture}
+\end{document}

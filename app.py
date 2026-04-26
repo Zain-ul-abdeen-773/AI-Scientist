@@ -135,7 +135,7 @@ def generate_plan(hypothesis: str, mode: str, state: AppState):
 def export_plan_as_file(state: AppState):
     """Export the last generated plan as a downloadable .md file."""
     if not state.last_plan_text or state.last_plan_text.startswith("⚠️"):
-        return gr.update(value=None, visible=False)
+        return None
 
     export_dir = Path(tempfile.gettempdir()) / "ai_scientist_exports"
     export_dir.mkdir(exist_ok=True)
@@ -145,13 +145,13 @@ def export_plan_as_file(state: AppState):
         f.write(state.last_plan_text)
 
     logger.info(f"Plan exported to {filepath}")
-    return gr.update(value=str(filepath), visible=True)
+    return str(filepath)
 
 
 def export_plan_as_pdf(state: AppState):
     """Export the last generated plan as a downloadable .pdf file."""
     if not state.last_plan_text or state.last_plan_text.startswith("⚠️"):
-        return gr.update(value=None, visible=False)
+        return None
 
     try:
         novelty_signal = state.last_novelty_result.get("signal", "")
@@ -160,10 +160,10 @@ def export_plan_as_pdf(state: AppState):
             hypothesis=state.last_hypothesis,
             novelty_signal=novelty_signal
         )
-        return gr.update(value=str(filepath), visible=True)
+        return str(filepath)
     except Exception as e:
         logger.error(f"Failed to export PDF: {e}")
-        return gr.update(value=None, visible=False)
+        return None
 
 
 def refine_hypothesis(hypothesis: str, state: AppState):
